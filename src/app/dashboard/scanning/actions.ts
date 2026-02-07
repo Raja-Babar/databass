@@ -1,43 +1,80 @@
 'use server';
 
-import { supabase } from '@/lib/supabase'; // Jo file humne banayi thi
-import { ParseAndTranslateOutput } from '@/ai/flows/parse-bill-entry';
-import { revalidatePath } from 'next/cache'; // Table ko foran update karne ke liye
+import { supabase } from '@/lib/supabase';
+import { revalidatePath } from 'next/cache';
 
-export async function parseAndTranslate(title: string, author: string): Promise<{ success: boolean, data?: ParseAndTranslateOutput, error?: string }> {
-  try {
-    // 1. Data ko organize karein (Bypass AI)
-    const result: ParseAndTranslateOutput = {
-      titleEnglish: title,
-      authorEnglish: author,
-      titleSindhi: '', 
-      authorSindhi: ''
+// Simplified ScanningRecord type based on your new requirements
+type ScanningRecord = {
+  book_id: string;
+  file_name: string;
+  book_name: string; // Replaces title_english
+  author_name: string; // Replaces author_english
+  year: string;
+  status: string; // This is your 'Stage' column
+  source: string;
+  scanned_by: string | null;
+  digitized_by: string | null; // New field
+  assigned_to: string | null; // This is your 'Asignee'
+  created_time: string;
+  last_edited_time: string;
+  last_edited_by: string | null;
+};
+
+export async function getScanningRecords() {
+    // Selecting specific columns to match the new structure
+    const { data, error } = await supabase
+        .from('scanning_progress')
+        .select('book_id, file_name, book_name, author_name, year, status, source, scanned_by, digitized_by, assigned_to, created_time, last_edited_time, last_edited_by')
+        .order('created_time', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching records:', error);
+        throw new Error(`Could not fetch scanning records: ${error.message}`);
+    }
+    return data as ScanningRecord[];
+}
+
+// The record passed in should not contain book_id, created_time, or last_edited_time
+export async function addScanningRecord(record: Omit<ScanningRecord, 'book_id' | 'created_time' | 'last_edited_time'>) {
+    const now = new Date().toISOString();
+    const newRecord = {
+        ...record,
+        created_time: now,
+        last_edited_time: now,
     };
 
-    // 2. SUPABASE QUERY: Data ko 'scanning_progress' table mein save karein
-    const { error: supabaseError } = await supabase
-      .from('scanning_progress')
-      .insert([
-        { 
-          title_english: title, 
-          author_english: author,
-          book_id: `BK-${Date.now()}`, // Filhal unique ID ke liye timestamp use kiya hai
-          status: 'Scanning',
-          created_time: new Date().toISOString()
-        }
-      ]);
+    const { data, error } = await supabase.from('scanning_progress').insert([newRecord]).select().single();
 
-    if (supabaseError) {
-      console.error('Supabase Insert Error:', supabaseError.message);
-      return { success: false, error: 'Database mein save nahi ho saka.' };
+    if (error) {
+        console.error('Error adding record:', error);
+        return { success: false, error: error.message };
     }
-
-    // 3. Page ko refresh karein taake naya data table mein nazar aaye
     revalidatePath('/dashboard/scanning');
+    return { success: true, data };
+}
 
-    return { success: true, data: result };
-  } catch (error) {
-    console.error('Error in saving process:', error);
-    return { success: false, error: 'Failed to process details.' };
-  }
+export async function updateScanningRecord(book_id: string, updates: Partial<ScanningRecord>) {
+    const { data, error } = await supabase
+        .from('scanning_progress')
+        .update({ ...updates, last_edited_time: new Date().toISOString() })
+        .eq('book_id', book_id)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error updating record:', error);
+        return { success: false, error: error.message };
+    }
+    revalidatePath('/dashboard/scanning');
+    return { success: true, data };
+}
+
+export async function deleteScanningRecord(book_id: string) {
+    const { error } = await supabase.from('scanning_progress').delete().eq('book_id', book_id);
+    if (error) {
+        console.error('Error deleting record:', error);
+        return { success: false, error: error.message };
+    }
+    revalidatePath('/dashboard/scanning');
+    return { success: true };
 }
