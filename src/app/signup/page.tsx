@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -7,9 +8,6 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useState } from 'react';
 import Image from 'next/image';
-
-// Supabase SSR helper
-import { createBrowserClient } from '@supabase/ssr';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -41,15 +39,9 @@ const formSchema = z.object({
 
 export default function SignupPage() {
   const router = useRouter();
-  const { appLogo } = useAuth();
+  const { signup, appLogo } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-
-  // Initialize Supabase Client
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -64,32 +56,18 @@ export default function SignupPage() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     try {
-      // 1. Supabase Auth: Sign Up the user
-      // Hum options.data mein name aur role bhej rahe hain taake SQL Trigger inhein 'public.users' table mein daal sake
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: values.email,
-        password: values.password,
-        options: {
-          data: {
-            full_name: values.name,
-            role: values.role,
-          },
-        },
-      });
-
-      if (authError) throw authError;
-
+      await signup(values.name, values.email, values.password, values.role);
       toast({
-        title: 'Registration Successful',
-        description: 'Please check your email for a verification link (if enabled) or log in.',
+        title: 'Signup Successful',
+        description: 'Your registration is pending approval.',
       });
-      
       router.push('/login');
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
       toast({
         variant: 'destructive',
         title: 'Signup Failed',
-        description: error.message || 'An unexpected error occurred.',
+        description: errorMessage,
       });
     } finally {
       setIsLoading(false);
@@ -100,17 +78,10 @@ export default function SignupPage() {
     <main className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
         <Card className="shadow-2xl overflow-hidden">
-          <div className="bg-primary h-4" />
+           <div className="bg-primary h-4" />
           <CardHeader className="text-center pt-8">
-            <div className="mx-auto">
-              {/* Image Fix: Console error avoid karne ke liye logic */}
-              {appLogo ? (
-                <Image src={appLogo} alt="Logo" width={112} height={112} className="h-28 w-28 rounded-full object-cover" />
-              ) : (
-                <div className="h-28 w-28 rounded-full bg-primary/10 flex items-center justify-center">
-                   <span className="text-xs font-bold text-primary">PORTAL</span>
-                </div>
-              )}
+             <div className="mx-auto">
+                <Image src={appLogo} alt="Panhwar Portal Logo" width={112} height={112} className="h-28 w-28 rounded-full" />
             </div>
             <CardTitle className="text-3xl font-bold tracking-tight mt-4">Create an Account</CardTitle>
             <CardDescription>Enter your details to get started.</CardDescription>
@@ -123,9 +94,9 @@ export default function SignupPage() {
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Full Name</FormLabel>
+                      <FormLabel>Name</FormLabel>
                       <FormControl>
-                        <Input placeholder="Enter your full name" {...field} />
+                        <Input placeholder="Your Name" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
