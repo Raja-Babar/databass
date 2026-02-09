@@ -123,7 +123,7 @@ const csvColumns = [
 
 
 export default function ScanningPage() {
-  const { user, importScanningRecords, getUsers } = useAuth();
+  const { user, importScanningRecords, users } = useAuth();
   const [scanningRecords, setScanningRecords] = useState<ScanningRecord[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -177,7 +177,10 @@ export default function ScanningPage() {
   const [detailsRecord, setDetailsRecord] = useState<ScanningRecord | null>(null);
 
 
-  const employees = useMemo(() => getUsers().filter(u => u.role === 'I.T & Scanning-Employee'), [getUsers]);
+// Sahi tareeka: users ko array ki tarah treat karein
+const employees = useMemo(() => {
+  return (users || []).filter(u => u.role === 'I.T & Scanning-Employee');
+}, [users]);
 
 
   const [filters, setFilters] = useState({
