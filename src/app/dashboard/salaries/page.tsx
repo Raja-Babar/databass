@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { useAttendance, AttendanceRecord } from '@/hooks/use-attendance'; // Import the new hook
+import { useAttendance, AttendanceRecord } from '@/hooks/itsection/use-attendance'; // Import the new hook
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';

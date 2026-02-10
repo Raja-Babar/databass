@@ -1,50 +1,27 @@
-
 'use client';
 
 import { useContext } from 'react';
-import { AuthContext, AttendanceRecord, EmployeeReport, ScanningRecord } from '@/context/auth-provider';
+import { AuthContext, User } from '@/context/auth-provider'; // Removed unused type imports
 
-type UserRole = 'Admin' | 'I.T & Scanning-Employee' | 'Library-Employee' | 'Accounts';
-type UserStatus = 'Approved' | 'Pending';
-
-type User = {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  status: UserStatus;
-  avatar?: string;
-};
-
-type StoredUser = User & { passwordHash: string };
-
+// This context type now exclusively handles authentication and user management
 type AuthContextType = {
   user: User | null;
+  users: User[];
   login: (email: string, pass: string) => Promise<void>;
-  signup: (name: string, email: string, pass: string, role: UserRole) => Promise<void>;
+  signup: (name: string, email: string, pass: string, role: any) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
-  getUsers: () => Omit<StoredUser, 'passwordHash'>[];
-  importUsers: (users: StoredUser[]) => Promise<void>;
-  resetUsers: () => Promise<void>;
-  updateUser: (email: string, data: Partial<Omit<User, 'email'>>) => Promise<void>;
-  deleteUser: (email: string) => Promise<void>;
-  approveUser: (email: string) => Promise<void>;
-  attendanceRecords: AttendanceRecord[];
-  updateAttendance: (employeeId: string, actions: { clockIn?: boolean; clockOut?: boolean; markLeave?: boolean }) => void;
-  updateAttendanceRecord: (employeeId: string, date: string, data: Partial<Omit<AttendanceRecord, 'employeeId' | 'date' | 'name'>>) => void;
-  deleteAttendanceRecord: (employeeId: string, date: string) => void;
-  employeeReports: EmployeeReport[];
-  addEmployeeReport: (report: Omit<EmployeeReport, 'id'> & { id?: string }) => void;
-  updateEmployeeReport: (reportId: string, data: Partial<Omit<EmployeeReport, 'id'>>) => void;
-  deleteEmployeeReport: (reportId: string) => void;
+  updateUser: (userId: string, data: Partial<Omit<User, 'id'>>) => Promise<void>;
+  deleteUser: (userId: string) => Promise<void>;
+  approveUser: (userId: string) => Promise<void>;
   requiredIp: string;
-  setRequiredIp: (ip: string) => void;
-  importScanningRecords: (records: ScanningRecord[]) => void;
+  setRequiredIp: (ip: string) => Promise<void>;
   appLogo: string;
-  updateAppLogo: (logo: string) => void;
+  updateAppLogo: (logo: string) => Promise<void>;
+  getUsers: () => User[];
 };
 
+// This hook remains the same, but the context it provides is now leaner
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {

@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { useMemo, useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
+import { useAttendance, AttendanceRecord } from '@/hooks/itsection/use-attendance';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Download, MoreHorizontal, Edit, Trash2, Calendar as CalendarIcon, Search, Globe, CalendarOff, Clock, ChevronDown, ChevronUp } from 'lucide-react';
@@ -17,14 +18,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import type { AttendanceRecord } from '@/context/auth-provider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-
 
 type AttendanceStatus = 'Present' | 'Absent' | 'Leave' | 'Not Marked';
 
@@ -42,7 +41,11 @@ const getStatusClasses = (status: AttendanceStatus) => {
 };
 
 export default function LibAttendancePage() {
-  const { user, attendanceRecords, updateAttendanceRecord, deleteAttendanceRecord, getUsers, requiredIp, setRequiredIp, updateAttendance } = useAuth();
+  // Auth hooks for user and global settings
+  const { user, getUsers, requiredIp, setRequiredIp } = useAuth();
+  // Attendance hook for all attendance-related logic
+  const { attendanceRecords, updateAttendance, updateAttendanceRecord, deleteAttendanceRecord } = useAttendance();
+  
   const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [searchTerm, setSearchTerm] = useState('');
@@ -84,7 +87,7 @@ export default function LibAttendancePage() {
     if (!isEmployee) return false;
     if (ipError) return false;
     if (todaysRecord?.status === 'Leave') return false;
-    if (!requiredIp || !currentIp) return true; // Allow if no restriction or IP not fetched yet
+    if (!requiredIp || !currentIp || requiredIp === "0.0.0.0") return true; // Allow if no restriction or IP not fetched yet
     return currentIp === requiredIp;
   }, [isEmployee, requiredIp, currentIp, ipError, todaysRecord]);
 
@@ -97,7 +100,6 @@ export default function LibAttendancePage() {
     const adminIds = allUsers.filter(u => u.role === 'Admin').map(u => u.id);
     const nonLibraryRoles = ['I.T & Scanning-Employee'];
     const nonLibraryUserIds = allUsers.filter(u => nonLibraryRoles.includes(u.role)).map(u => u.id);
-
 
     const records = attendanceRecords.filter(r => !adminIds.includes(r.employeeId) && !nonLibraryUserIds.includes(r.employeeId));
 
@@ -218,8 +220,8 @@ export default function LibAttendancePage() {
   
   const handleEditClick = (record: AttendanceRecord) => {
       setSelectedRecord(record);
-      setEditedTimeIn(record.timeIn);
-      setEditedTimeOut(record.timeOut);
+      setEditedTimeIn(record.timeIn || '');
+      setEditedTimeOut(record.timeOut || '');
       setEditedStatus(record.status as AttendanceStatus);
       setIsEditDialogOpen(true);
   };
@@ -230,10 +232,6 @@ export default function LibAttendancePage() {
               timeIn: editedTimeIn,
               timeOut: editedTimeOut,
               status: editedStatus,
-          });
-          toast({
-              title: 'Record Updated',
-              description: 'The attendance record has been successfully updated.',
           });
           setIsEditDialogOpen(false);
           setSelectedRecord(null);
@@ -251,8 +249,7 @@ export default function LibAttendancePage() {
   const handleClockIn = () => {
     if (user && canClockIn) {
       updateAttendance(user.id, { clockIn: true });
-      toast({ title: 'Clocked In', description: 'Your arrival time has been recorded.' });
-    } else {
+    } else if (user) {
       toast({ variant: 'destructive', title: 'Clock-In Failed', description: `Your IP (${currentIp}) does not match the required IP (${requiredIp}).` });
     }
   };
@@ -260,17 +257,12 @@ export default function LibAttendancePage() {
   const handleClockOut = () => {
     if (user) {
       updateAttendance(user.id, { clockOut: true });
-      toast({ title: 'Clocked Out', description: 'Your departure time has been recorded.' });
     }
   };
   
   const handleMarkLeave = () => {
     if (user) {
       updateAttendance(user.id, { markLeave: true });
-      toast({
-        title: "Leave Marked",
-        description: "You have been marked as on leave for today.",
-      });
     }
   };
 
@@ -345,7 +337,7 @@ export default function LibAttendancePage() {
                 <CardContent className="flex flex-col items-start gap-4">
                     <div className="w-full space-y-4">
                     <div className="flex w-full gap-4">
-                        <Button onClick={handleClockIn} className="w-full" disabled={hasClockedIn || !canClockIn}>
+                        <Button onClick={handleClockIn} className="w-full" disabled={hasClockedIn || !canClockIn || isOnLeave}>
                             <Clock className="mr-2 h-4 w-4" />
                             Clock In
                         </Button>
@@ -358,7 +350,7 @@ export default function LibAttendancePage() {
                         <CalendarOff className="mr-2 h-4 w-4" />
                         Mark Leave
                     </Button>
-                    {!canClockIn && currentIp && requiredIp && (
+                    {!canClockIn && currentIp && requiredIp !== "0.0.0.0" && (
                         <p className="text-xs text-destructive text-center">
                         Clock-in disabled. Your IP ({currentIp}) does not match required IP ({requiredIp}).
                         </p>
@@ -375,7 +367,7 @@ export default function LibAttendancePage() {
             <Card>
                 <CardHeader>
                     <CardTitle>Attendance IP Restriction</CardTitle>
-                    <CardDescription>Set a specific IP address from which employees can clock in. Leave blank to allow clock-in from any IP.</CardDescription>
+                    <CardDescription>Set a specific IP address from which employees can clock in. Leave blank or set to 0.0.0.0 to allow clock-in from any IP.</CardDescription>
                 </CardHeader>
                 <CardContent className="flex items-center gap-2">
                     <div className="relative flex-grow">
@@ -565,5 +557,3 @@ export default function LibAttendancePage() {
     </div>
   );
 }
-
-    
