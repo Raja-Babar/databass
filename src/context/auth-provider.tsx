@@ -100,13 +100,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return profile;
   }, []);
 
-  const logout = useCallback(async () => {
-    setIsLoading(true);
-    await supabase.auth.signOut();
-    setUser(null);
-    router.push('/login');
-    setIsLoading(false);
-  }, [router]);
+  useEffect(() => {
+    const initAuth = async () => {
+      setIsLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        await Promise.all([fetchUsers(), fetchSettings()]);
+        const profile = await fetchCurrentUser(session.user.id);
+        if (!profile?.is_approved) {
+            await supabase.auth.signOut(); // Log out unapproved users
+            setUser(null);
+        }
+      } else {
+        await fetchSettings(); // Fetch settings even if not logged in
+      }
+      setIsLoading(false);
+    };
+
+    initAuth();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+            await fetchInitialData(session.user.id);
+        } else if (event === 'SIGNED_OUT') {
+            setUser(null);
+            router.push('/login');
+        }
+    });
+
+    return () => {
+        authListener.subscription.unsubscribe();
+    };
+}, []); // Removed dependencies to run only once
 
   const fetchInitialData = useCallback(async (userId?: string) => {
     await Promise.all([fetchUsers(), fetchSettings()]);
@@ -115,24 +141,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [fetchUsers, fetchSettings, fetchCurrentUser]);
 
-  useEffect(() => {
-    const initAuth = async () => {
-      setIsLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) await fetchInitialData(session.user.id);
-      setIsLoading(false);
-
-      const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-          await fetchInitialData(session.user.id);
-        } else if (event === 'SIGNED_OUT') {
-          await logout();
-        }
-      });
-      return () => { authListener.subscription.unsubscribe(); };
-    };
-    initAuth();
-  }, [fetchInitialData, logout]);
+  const logout = async () => {
+    await supabase.auth.signOut();
+  };
 
   const refreshUser = async () => {
       if(user) {
@@ -224,7 +235,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     getUsers: () => users,
   };
 
-  if (isLoading) {
+  if (isLoading && !user) {
     return (
       <div className="flex h-screen w-screen items-center justify-center">
         <div className="w-full max-w-md space-y-4 p-4">
