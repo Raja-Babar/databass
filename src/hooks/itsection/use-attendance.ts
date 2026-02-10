@@ -17,7 +17,7 @@ export type AttendanceRecord = {
 };
 
 export function useAttendance() {
-  const { user } = useAuth(); // Current Logged-in User
+  const { user } = useAuth(); 
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -34,7 +34,7 @@ export function useAttendance() {
     const { data, error } = await supabase
       .from('attendance')
       .select('*')
-      .eq('user_id', user.id) // Sirf is user ka data
+      .eq('user_id', user.id) // Sirf apna data
       .order('date', { ascending: false });
     
     if (error) {
@@ -55,14 +55,21 @@ export function useAttendance() {
     setLoading(false);
   }, [user]);
 
-  // Real-time updates for this user only
+  // Real-time updates
   useEffect(() => {
     fetchMyRecords();
 
+    if (!user?.id) return;
+
     const channel = supabase
-      .channel(`my_attendance_${user?.id}`)
+      .channel(`attendance_user_${user.id}`)
       .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'attendance', filter: `user_id=eq.${user?.id}` }, 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'attendance', 
+          filter: `user_id=eq.${user.id}` 
+        }, 
         () => fetchMyRecords()
       )
       .subscribe();
@@ -79,29 +86,39 @@ export function useAttendance() {
 
     try {
       if (actions.clockIn) {
-        await supabase.from('attendance').upsert({ 
+        // Clock In: Naya record banaye ga ya update karega agar aaj ka exist karta hai
+        const { error } = await supabase.from('attendance').upsert({ 
           user_id: user.id, 
           date: karachiDate,
           check_in: karachiTime,
           status: 'Present'
         }, { onConflict: 'user_id,date' });
+
+        if (error) throw error;
         toast({ title: 'Clocked In', description: `Recorded at ${karachiTime}` });
 
       } else if (actions.clockOut) {
-        await supabase.from('attendance')
+        // Clock Out: Aaj ke record mein check_out time dalega
+        const { error } = await supabase.from('attendance')
           .update({ check_out: karachiTime })
           .match({ user_id: user.id, date: karachiDate });
+
+        if (error) throw error;
         toast({ title: 'Clocked Out', description: `Recorded at ${karachiTime}` });
 
       } else if (actions.markLeave) {
-        await supabase.from('attendance').upsert({
+        // Leave: Status change karega
+        const { error } = await supabase.from('attendance').upsert({
           user_id: user.id,
           date: karachiDate,
           status: 'Leave',
           reason: actions.reason || 'No reason provided'
         }, { onConflict: 'user_id,date' });
-        toast({ title: 'Leave Marked', description: 'Success' });
+
+        if (error) throw error;
+        toast({ title: 'Leave Marked', description: 'Your leave has been recorded.' });
       }
+      
       fetchMyRecords();
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Action Failed', description: err.message });
@@ -111,6 +128,7 @@ export function useAttendance() {
   return { 
     attendanceRecords, 
     loading,
-    updateAttendance 
+    updateAttendance,
+    refresh: fetchMyRecords 
   };
 }

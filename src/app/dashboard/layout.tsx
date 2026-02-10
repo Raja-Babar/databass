@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { SidebarProvider, Sidebar, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
+import { SidebarProvider, Sidebar, SidebarInset, SidebarTrigger, SidebarContent } from '@/components/ui/sidebar';
 import { DashboardNav } from '@/components/dashboard-nav';
+import { ITSectionNav } from '@/components/ITSectionNav'; // Naya import
 import { UserNav } from '@/components/user-nav';
 import { ShieldCheck, Loader2 } from 'lucide-react';
 import Image from 'next/image';
@@ -16,8 +17,6 @@ export default function DashboardLayout({
 }) {
   const { user, isLoading, appLogo } = useAuth();
   const router = useRouter();
-  
-  // Local state taaki humein pata chale ke pehli baar loading ho chuki hai
   const [initialCheckDone, setInitialCheckDone] = useState(false);
 
   useEffect(() => {
@@ -29,7 +28,6 @@ export default function DashboardLayout({
     }
   }, [user, isLoading, router]);
 
-  // --- FIX: Sirf tab loading dikhao jab user na ho AUR pehli baar load ho raha ho ---
   if (isLoading && !initialCheckDone && !user) {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center bg-background gap-4">
@@ -47,13 +45,13 @@ export default function DashboardLayout({
     );
   }
 
-  // Agar user nahi hai toh kuch render mat karo (redirect ho raha hai)
   if (!user && initialCheckDone) return null;
 
   return (
     <SidebarProvider defaultOpen={true}>
       <Sidebar className="border-r border-sidebar-border">
         <div className="flex h-full flex-col">
+          {/* --- Header / Logo Area --- */}
           <div className="flex h-16 shrink-0 items-center gap-2 border-b border-sidebar-border px-4 bg-slate-50/50">
             <div className="flex items-center gap-2">
               <div className="relative h-8 w-8 overflow-hidden rounded-full border border-slate-200 shadow-sm">
@@ -69,7 +67,15 @@ export default function DashboardLayout({
               </span>
             </div>
           </div>
-          <DashboardNav />
+
+          {/* --- Navigation Area (Role Based) --- */}
+          <SidebarContent className="flex-1 overflow-y-auto">
+            {/* Agar role Admin hai toh purana DashboardNav dikhao */}
+            {user?.role === 'Admin' && <DashboardNav />}
+            
+            {/* Agar role I.T & Scanning hai toh naya ITSectionNav dikhao */}
+            {user?.role === 'I.T & Scanning-Employee' && <ITSectionNav />}
+          </SidebarContent>
         </div>
       </Sidebar>
 
