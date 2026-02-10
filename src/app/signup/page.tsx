@@ -1,172 +1,148 @@
-
 'use client';
 
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
-import * as z from 'zod';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { useState } from 'react';
-import Image from 'next/image';
-
-import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
-const formSchema = z.object({
-  name: z.string().min(2, {
-    message: 'Name must be at least 2 characters.',
-  }),
-  email: z.string().email({
-    message: 'Please enter a valid email address.',
-  }),
-  password: z.string().min(6, {
-    message: 'Password must be at least 6 characters.',
-  }),
-  role: z.enum(['Admin', 'I.T & Scanning-Employee', 'Library-Employee', 'Accounts']),
-});
+import { Loader2, UserPlus, Mail, Lock, User } from 'lucide-react';
 
 export default function SignupPage() {
-  const router = useRouter();
-  const { signup, appLogo } = useAuth();
-  const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
-
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: '',
-      email: '',
-      password: '',
-      role: 'I.T & Scanning-Employee',
-    },
+  const [formData, setFormData] = useState({ 
+    name: '', 
+    email: '', 
+    password: '',
+    // Role aur Department ab auto-set hain
+    role: 'I.T & Scanning-Employee',
+    department: 'I.T Section' 
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const { signup } = useAuth();
+  const { toast } = useToast();
+  const router = useRouter();
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    setIsLoading(true);
-    try {
-      await signup(values.name, values.email, values.password, values.role);
-      toast({
-        title: 'Signup Successful',
-        description: 'Your registration is pending approval.',
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.name || !formData.email || !formData.password) {
+      toast({ 
+        variant: 'destructive', 
+        title: 'Missing Info', 
+        description: 'Please fill all fields to continue.' 
       });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Signup function call
+      await signup(
+        formData.name, 
+        formData.email, 
+        formData.password, 
+        formData.role as any
+      );
+      
+      toast({
+        title: 'Registration Sent!',
+        description: 'Account created. Please wait for Admin approval.',
+      });
+      
+      // Success ke baad login par bhej dena
       router.push('/login');
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
+    } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Signup Failed',
-        description: errorMessage,
+        description: error.message || 'Network error, please try again.',
       });
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
-  }
+  };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md">
-        <Card className="shadow-2xl overflow-hidden">
-           <div className="bg-primary h-4" />
-          <CardHeader className="text-center pt-8">
-             <div className="mx-auto">
-                <Image src={appLogo} alt="Panhwar Portal Logo" width={112} height={112} className="h-28 w-28 rounded-full" />
-            </div>
-            <CardTitle className="text-3xl font-bold tracking-tight mt-4">Create an Account</CardTitle>
-            <CardDescription>Enter your details to get started.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Your Name" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input placeholder="you@example.com" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Password</FormLabel>
-                      <FormControl>
-                        <Input type="password" placeholder="••••••••" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="role"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Role</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a role" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Admin">Admin</SelectItem>
-                          <SelectItem value="I.T & Scanning-Employee">I.T & Scanning-Employee</SelectItem>
-                          <SelectItem value="Library-Employee">Library-Employee</SelectItem>
-                          <SelectItem value="Accounts">Accounts</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button type="submit" className="w-full !mt-6" disabled={isLoading}>
-                  {isLoading ? 'Creating Account...' : 'Create Account'}
-                </Button>
-                <div className="text-center text-sm text-muted-foreground">
-                    <p>
-                        Already have an account?{' '}
-                        <Link href="/login" className="font-semibold text-primary underline-offset-4 hover:underline">
-                            Log in
-                        </Link>
-                    </p>
-                </div>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
+    <div className="flex min-h-screen items-center justify-center bg-black p-4 font-sans">
+      <div className="w-full max-w-md space-y-6 rounded-2xl bg-zinc-900 p-8 border border-zinc-800 shadow-2xl">
+        
+        <div className="text-center space-y-2">
+          <div className="mx-auto w-12 h-12 bg-indigo-600/20 rounded-full flex items-center justify-center mb-4">
+            <UserPlus className="text-indigo-500 h-6 w-6" />
+          </div>
+          <h2 className="text-3xl font-extrabold text-white tracking-tight">Join MHPISSJ</h2>
+          <p className="text-zinc-400 text-sm">Registering for <span className="text-indigo-400 font-semibold">I.T Section</span></p>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="space-y-4 mt-6">
+          {/* Full Name */}
+          <div className="relative">
+            <User className="absolute left-3 top-3 h-5 w-5 text-zinc-500" />
+            <input
+              type="text"
+              placeholder="Full Name"
+              className="w-full rounded-xl bg-zinc-800/50 pl-10 pr-4 py-3 text-white border border-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            />
+          </div>
+
+          {/* Email */}
+          <div className="relative">
+            <Mail className="absolute left-3 top-3 h-5 w-5 text-zinc-500" />
+            <input
+              type="email"
+              placeholder="Email Address"
+              className="w-full rounded-xl bg-zinc-800/50 pl-10 pr-4 py-3 text-white border border-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            />
+          </div>
+
+          {/* Password */}
+          <div className="relative">
+            <Lock className="absolute left-3 top-3 h-5 w-5 text-zinc-500" />
+            <input
+              type="password"
+              placeholder="Password"
+              className="w-full rounded-xl bg-zinc-800/50 pl-10 pr-4 py-3 text-white border border-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            />
+          </div>
+
+          {/* Hidden/Disabled Role Info (Sirf dikhane ke liye) */}
+          <div className="p-3 bg-indigo-900/10 border border-indigo-500/20 rounded-xl">
+             <p className="text-[11px] text-indigo-300 uppercase tracking-widest font-bold text-center">
+               Access Level: Employee (I.T)
+             </p>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full flex justify-center items-center rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white hover:bg-indigo-500 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-600/20"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              'Create Account'
+            )}
+          </button>
+        </form>
+
+        <p className="text-center text-sm text-zinc-500">
+          Already have an account?{' '}
+          <button 
+            onClick={() => router.push('/login')} 
+            className="text-indigo-400 hover:underline font-medium"
+          >
+            Sign in
+          </button>
+        </p>
       </div>
-    </main>
+    </div>
   );
 }

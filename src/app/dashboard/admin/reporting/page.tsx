@@ -29,7 +29,7 @@ import {
 
 // Hooks
 import { useAuth } from '@/hooks/use-auth';
-import { useReports } from '@/hooks/use-reports';
+import { useReports } from '@/hooks/itsection/use-reports';
 
 export default function ReportingPage() {
   const { user } = useAuth();

@@ -5,7 +5,6 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 
-// Type definition including the new 'reason' field
 export type AttendanceRecord = {
   id: number;
   employeeId: string;
@@ -14,184 +13,104 @@ export type AttendanceRecord = {
   timeIn: string | null;
   timeOut: string | null;
   status: 'Present' | 'Absent' | 'Leave' | 'Not Marked';
-  reason?: string | null; // Added reason for leaves
+  reason?: string | null;
 };
 
 export function useAttendance() {
-  const { users } = useAuth();
+  const { user } = useAuth(); // Current Logged-in User
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  // --- Karachi Time Helpers ---
-  const getKarachiDate = () => {
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Karachi',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(new Date()); // Returns YYYY-MM-DD
-  };
+  // Karachi Time Helpers
+  const getKarachiDate = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi' }).format(new Date());
+  const getKarachiTime = () => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
 
-  const getKarachiTime = () => {
-    return new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Asia/Karachi',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).format(new Date()); // Returns HH:mm
-  };
+  // --- Fetch ONLY Current User Records ---
+  const fetchMyRecords = useCallback(async () => {
+    if (!user?.id) return;
 
-  // --- Fetch Records ---
-  const fetchAttendanceRecords = useCallback(async () => {
-    if (!users || users.length === 0) return;
-
+    setLoading(true);
     const { data, error } = await supabase
       .from('attendance')
       .select('*')
+      .eq('user_id', user.id) // Sirf is user ka data
       .order('date', { ascending: false });
     
     if (error) {
       console.error('Error fetching attendance:', error);
     } else if (data) {
-      const recordsWithNames = data.map(rec => {
-        const matchedUser = users.find(u => String(u.id) === String(rec.user_id));
-        return {
-          id: rec.id,
-          employeeId: rec.user_id,
-          name: matchedUser ? matchedUser.name : 'Unknown',
-          date: rec.date,
-          timeIn: rec.check_in,
-          timeOut: rec.check_out,
-          status: rec.status,
-          reason: rec.reason, // Map from DB
-        };
-      });
-      setAttendanceRecords(recordsWithNames as AttendanceRecord[]);
+      const formatted = data.map(rec => ({
+        id: rec.id,
+        employeeId: rec.user_id,
+        name: user.name || 'Me', 
+        date: rec.date,
+        timeIn: rec.check_in,
+        timeOut: rec.check_out,
+        status: rec.status,
+        reason: rec.reason,
+      }));
+      setAttendanceRecords(formatted as AttendanceRecord[]);
     }
-  }, [users]);
+    setLoading(false);
+  }, [user]);
 
-  // --- Real-time Subscription ---
+  // Real-time updates for this user only
   useEffect(() => {
-    fetchAttendanceRecords();
+    fetchMyRecords();
+
     const channel = supabase
-      .channel('attendance_db_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, () => {
-        fetchAttendanceRecords();
-      })
+      .channel(`my_attendance_${user?.id}`)
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'attendance', filter: `user_id=eq.${user?.id}` }, 
+        () => fetchMyRecords()
+      )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [fetchAttendanceRecords]);
+  }, [user?.id, fetchMyRecords]);
 
-  // --- Main Actions (Clock In, Clock Out, Leave) ---
-  const updateAttendance = async (
-    userId: string, 
-    actions: { clockIn?: boolean; clockOut?: boolean; markLeave?: boolean; reason?: string }
-  ) => {
+  // --- Actions ---
+  const updateAttendance = async (actions: { clockIn?: boolean; clockOut?: boolean; markLeave?: boolean; reason?: string }) => {
+    if (!user?.id) return;
+
     const karachiDate = getKarachiDate();
     const karachiTime = getKarachiTime();
 
-    if (actions.clockIn) {
-      const { error } = await supabase.from('attendance').upsert({ 
-          user_id: userId, 
+    try {
+      if (actions.clockIn) {
+        await supabase.from('attendance').upsert({ 
+          user_id: user.id, 
           date: karachiDate,
           check_in: karachiTime,
-          status: 'Present',
-          reason: null // Reset reason if clocking in
-      }, { onConflict: 'user_id,date' });
-
-      if (error) {
-        toast({ variant: 'destructive', title: 'Clock In Failed', description: error.message });
-      } else {
-        toast({ title: 'Clocked In', description: `Arrival recorded at ${karachiTime} PKT` });
-      }
-
-    } else if (actions.clockOut) {
-      // Pehle check karein ke aaj ka clock-in hai ya nahi
-      const { data: existing } = await supabase
-        .from('attendance')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('date', karachiDate)
-        .single();
-
-      if (!existing) {
-        toast({ variant: 'destructive', title: 'Error', description: 'No Clock-in record found for today.' });
-        return;
-      }
-
-      const { error } = await supabase
-        .from('attendance')
-        .update({ check_out: karachiTime })
-        .eq('id', existing.id);
-
-      if (error) {
-        toast({ variant: 'destructive', title: 'Clock Out Failed', description: error.message });
-      } else {
-        toast({ title: 'Clocked Out', description: `Departure recorded at ${karachiTime} PKT` });
-      }
-
-    } else if (actions.markLeave) {
-        const { error } = await supabase.from('attendance').upsert({
-            user_id: userId,
-            date: karachiDate,
-            status: 'Leave',
-            reason: actions.reason || 'No reason provided', // Save leave reason
-            check_in: null,
-            check_out: null,
+          status: 'Present'
         }, { onConflict: 'user_id,date' });
+        toast({ title: 'Clocked In', description: `Recorded at ${karachiTime}` });
 
-        if (error) {
-            toast({ variant: 'destructive', title: 'Leave Request Failed', description: error.message });
-        } else {
-            toast({ title: 'Leave Marked', description: 'Your leave has been recorded successfully.' });
-        }
-    }
-  };
-  
-  // --- Admin Correction Update ---
-  const updateAttendanceRecord = async (
-    employeeId: string, 
-    date: string, 
-    data: Partial<Omit<AttendanceRecord, 'employeeId' | 'date' | 'name'>>
-  ) => {
-    const backendData = {
-        check_in: data.timeIn,
-        check_out: data.timeOut,
-        status: data.status,
-        reason: data.reason,
-    };
+      } else if (actions.clockOut) {
+        await supabase.from('attendance')
+          .update({ check_out: karachiTime })
+          .match({ user_id: user.id, date: karachiDate });
+        toast({ title: 'Clocked Out', description: `Recorded at ${karachiTime}` });
 
-    const { error } = await supabase
-        .from('attendance')
-        .update(backendData)
-        .match({ user_id: employeeId, date });
-
-    if (error) {
-        toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
-    } else {
-        toast({ title: 'Success', description: 'Record updated successfully.' });
-    }
-  };
-
-  // --- Delete Record ---
-  const deleteAttendanceRecord = async (employeeId: string, date: string) => {
-    const { error } = await supabase
-        .from('attendance')
-        .delete()
-        .match({ user_id: employeeId, date });
-
-    if (error) {
-        toast({ variant: 'destructive', title: 'Delete Failed', description: error.message });
-    } else {
-        toast({ title: 'Deleted', description: 'Record removed successfully.' });
+      } else if (actions.markLeave) {
+        await supabase.from('attendance').upsert({
+          user_id: user.id,
+          date: karachiDate,
+          status: 'Leave',
+          reason: actions.reason || 'No reason provided'
+        }, { onConflict: 'user_id,date' });
+        toast({ title: 'Leave Marked', description: 'Success' });
+      }
+      fetchMyRecords();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Action Failed', description: err.message });
     }
   };
 
   return { 
     attendanceRecords, 
-    updateAttendance, 
-    updateAttendanceRecord, 
-    deleteAttendanceRecord 
+    loading,
+    updateAttendance 
   };
 }

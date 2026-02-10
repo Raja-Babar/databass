@@ -1,10 +1,10 @@
 'use client';
 
 import React, { createContext, useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { Loader2 } from 'lucide-react';
 
 // --- Type Definitions ---
 export type UserRole = 'Admin' | 'I.T & Scanning-Employee' | 'Library-Employee' | 'Accounts';
@@ -32,46 +32,28 @@ export type User = {
 
 type AuthContextType = {
   user: User | null;
-  users: User[];
   login: (email: string, pass: string) => Promise<void>;
   signup: (name: string, email: string, pass: string, role: UserRole) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
-  refreshUser: () => Promise<void>; // Added for profile updates
-  deleteUser: (userId: string) => Promise<void>;
-  approveUser: (userId: string) => Promise<void>;
+  refreshUser: () => Promise<void>;
   requiredIp: string;
   setRequiredIp: (ip: string) => Promise<void>;
   appLogo: string;
   updateAppLogo: (logo: string) => Promise<void>;
-  getUsers: () => User[];
 };
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [requiredIp, setRequiredIpState] = useState('0.0.0.0');
   const [appLogo, setAppLogo] = useState('/logo.png');
   
   const router = useRouter();
+  const pathname = usePathname();
   const { toast } = useToast();
-
-  const fetchUsers = useCallback(async () => {
-    const { data, error } = await supabase.from('profiles').select('*');
-    if (error) {
-      console.error('Error fetching users:', error);
-    } else {
-      const activeUsers = data.map(u => ({
-        ...u,
-        status: u.is_approved ? 'Approved' : 'Pending',
-        avatar: u.avatar_url,
-      }));
-      setUsers(activeUsers);
-    }
-  }, []);
 
   const fetchSettings = useCallback(async () => {
     const { data, error } = await supabase.from('settings').select('*');
@@ -91,137 +73,104 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .single();
       
     if (profile && !error) {
-      setUser({ 
+      const formattedUser = { 
         ...profile, 
         status: profile.is_approved ? 'Approved' : 'Pending', 
         avatar: profile.avatar_url 
-      });
+      };
+      setUser(formattedUser);
+      return formattedUser;
     }
-    return profile;
+    return null;
   }, []);
 
+  // Initial Auth Check & Session Management
   useEffect(() => {
     const initAuth = async () => {
       setIsLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session) {
-        await Promise.all([fetchUsers(), fetchSettings()]);
-        const profile = await fetchCurrentUser(session.user.id);
-        if (!profile?.is_approved) {
-            await supabase.auth.signOut(); // Log out unapproved users
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        await fetchSettings();
+        
+        if (session) {
+          const profile = await fetchCurrentUser(session.user.id);
+          if (!profile?.is_approved) {
+            await supabase.auth.signOut();
             setUser(null);
-        }
-      } else {
-        await fetchSettings(); // Fetch settings even if not logged in
+          }
+        } 
+      } catch (err) {
+        console.error("Auth Init Error:", err);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     initAuth();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-            await fetchInitialData(session.user.id);
-        } else if (event === 'SIGNED_OUT') {
-            setUser(null);
-            router.push('/login');
-        }
+      if (event === 'SIGNED_IN' && session) {
+        await fetchCurrentUser(session.user.id);
+        router.push('/dashboard');
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        router.push('/login');
+      }
     });
 
     return () => {
-        authListener.subscription.unsubscribe();
+      authListener.subscription.unsubscribe();
     };
-}, []); // Removed dependencies to run only once
-
-  const fetchInitialData = useCallback(async (userId?: string) => {
-    await Promise.all([fetchUsers(), fetchSettings()]);
-    if (userId) {
-      await fetchCurrentUser(userId);
-    }
-  }, [fetchUsers, fetchSettings, fetchCurrentUser]);
+  }, []); // Run only once
 
   const logout = async () => {
     await supabase.auth.signOut();
   };
 
   const refreshUser = async () => {
-      if(user) {
-          await fetchCurrentUser(user.id);
-      }
+    if(user) await fetchCurrentUser(user.id);
   };
 
   const login = async (email: string, pass: string) => {
     setIsLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-    if (error) {
-      setIsLoading(false);
-      throw new Error(error.message);
-    }
-    if (data.user) {
-      const { data: profile } = await supabase.from('profiles').select('is_approved').eq('id', data.user.id).single();
-      if (profile && !profile.is_approved) {
-        await supabase.auth.signOut();
-        setIsLoading(false);
-        throw new Error('Your account is pending approval from an admin.');
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+      if (error) throw error;
+      
+      if (data.user) {
+        const profile = await fetchCurrentUser(data.user.id);
+        if (profile && !profile.is_approved) {
+          await supabase.auth.signOut();
+          throw new Error('Your account is pending approval from an admin.');
+        }
       }
+    } catch (error: any) {
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const signup = async (name: string, email: string, pass: string, role: UserRole) => {
     setIsLoading(true);
-    const { data, error } = await supabase.auth.signUp({ 
-      email, 
-      password: pass, 
-      options: { data: { name, role, is_approved: role === 'Admin' } } 
-    });
-    if (error) { setIsLoading(false); throw new Error(error.message); }
-    toast({ title: 'Signup Successful', description: 'Please check your email to confirm.' });
-    setIsLoading(false);
-  };
-
-  const approveUser = async (userId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ is_approved: true })
-        .eq('id', userId)
-        .select();
-
-      if (error) throw error;
-
-      if (!data || data.length === 0) {
-        throw new Error("Update failed: Row not found or RLS policy block.");
-      }
-
-      setUsers(prev => prev.map(u => 
-        u.id === userId ? { ...u, is_approved: true, status: 'Approved' } : u
-      ));
-
-      toast({ title: 'Success', description: 'User approved in database.' });
-    } catch (error: any) {
-      console.error('Approval Error:', error.message);
-      toast({ 
-        variant: 'destructive', 
-        title: 'Approval Failed', 
-        description: error.message 
+      const { error } = await supabase.auth.signUp({ 
+        email, 
+        password: pass, 
+        options: { data: { name, role, is_approved: role === 'Admin' } } 
       });
-    }
-  };
-
-  const deleteUser = async (userId: string) => {
-    const { error } = await supabase.rpc('delete_user_by_id', { user_id_to_delete: userId });
-    if (error) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message });
-    } else { 
-      await fetchUsers(); 
-      toast({ variant: 'destructive', title: 'User Deleted' }); 
+      if (error) throw error;
+      toast({ title: 'Signup Successful', description: 'Please check your email to confirm.' });
+    } catch (error: any) {
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const setRequiredIp = async (ip: string) => {
     const { error } = await supabase.from('settings').upsert({ key: 'requiredIp', value: ip }, { onConflict: 'key' });
-    if (!error) { setRequiredIpState(ip); toast({ title: 'IP Address Updated' }); }
+    if (!error) { setRequiredIpState(ip); toast({ title: 'IP Updated' }); }
   };
   
   const updateAppLogo = async (logo: string) => {
@@ -230,19 +179,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const authContextValue = { 
-    user, users, login, signup, logout, isLoading, refreshUser, deleteUser, approveUser,
+    user, login, signup, logout, isLoading, refreshUser,
     requiredIp, setRequiredIp, appLogo, updateAppLogo,
-    getUsers: () => users,
   };
 
-  if (isLoading && !user) {
+  // --- RENDERING ---
+  if (isLoading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center">
-        <div className="w-full max-w-md space-y-4 p-4">
-          <Skeleton className="h-12 w-1/3" />
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-10 w-full" />
-        </div>
+      <div className="flex h-screen w-screen flex-col items-center justify-center bg-white">
+        <Loader2 className="h-10 w-10 animate-spin text-indigo-600" />
+        <p className="mt-4 text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+          Initializing MHPISSJ Portal
+        </p>
       </div>
     );
   }

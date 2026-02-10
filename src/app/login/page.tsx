@@ -21,6 +21,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase'; // Direct Supabase Import
 
 const formSchema = z.object({
   email: z.string().email({
@@ -33,7 +35,7 @@ const formSchema = z.object({
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { appLogo } = useAuth(); // Sirf logo context se le rahe hain
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -48,19 +50,43 @@ export default function LoginPage() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     try {
-      await login(values.email, values.password);
-      toast({
-        title: 'Login Successful',
-        description: 'Welcome back to the portal!',
+      // 1. Direct Supabase call to Sign In
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: values.email,
+        password: values.password,
       });
-      // Redirect to main dashboard (it handles role-based sub-routing)
-      router.replace('/dashboard');
+
+      if (authError) throw authError;
+
+      if (data.user) {
+        // 2. Profile check karein ke approved hai ya nahi
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('is_approved')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profileError) throw profileError;
+
+        if (!profile?.is_approved) {
+          // Agar approved nahi hai toh logout karwa dein
+          await supabase.auth.signOut();
+          throw new Error('Your account is pending approval from an admin.');
+        }
+
+        // 3. Sab theek hai toh redirect
+        toast({
+          title: 'Login Successful',
+          description: 'Welcome back to the portal!',
+        });
+        
+        router.replace('/dashboard');
+      }
     } catch (error: any) {
-      const errorMessage = error?.message || 'Invalid credentials or network error.';
       toast({
         variant: 'destructive',
         title: 'Login Failed',
-        description: errorMessage,
+        description: error?.message || 'Invalid credentials or network error.',
       });
     } finally {
       setIsLoading(false);
@@ -71,19 +97,21 @@ export default function LoginPage() {
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-4">
       <div className="w-full max-w-md animate-in fade-in zoom-in duration-500">
         <Card className="shadow-2xl overflow-hidden border-none rounded-[2.5rem] bg-white">
-          {/* Top accent bar */}
           <div className="bg-indigo-600 h-2 w-full" />
           
           <CardHeader className="text-center pt-10 pb-6">
-            <div className="mx-auto bg-slate-50 p-3 rounded-full shadow-inner inline-block mb-4">
-              <Image 
-                src="/logo.png" 
-                alt="MHPISSJ Logo" 
-                width={100} 
-                height={100} 
-                className="h-24 w-24 rounded-full object-cover shadow-sm"
-                priority
-              />
+            <div className="mx-auto bg-slate-50 p-3 rounded-full shadow-inner inline-block mb-4 relative">
+              <div className="h-24 w-24 rounded-full overflow-hidden flex items-center justify-center bg-white border shadow-sm">
+                <Image 
+                  src={appLogo || "/logo.png"} 
+                  alt="MHPISSJ Logo" 
+                  width={100} 
+                  height={100} 
+                  className="object-cover"
+                  priority
+                  unoptimized 
+                />
+              </div>
             </div>
             <CardTitle className="text-3xl font-black tracking-tighter text-slate-800 uppercase leading-none">
               MHPISSJ-Portal
@@ -135,10 +163,17 @@ export default function LoginPage() {
 
                 <Button 
                   type="submit" 
-                  className="w-full h-12 rounded-2xl font-black text-sm tracking-widest bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all" 
+                  className="w-full h-12 rounded-2xl font-black text-sm tracking-widest bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all flex items-center justify-center gap-2" 
                   disabled={isLoading}
                 >
-                  {isLoading ? 'AUTHENTICATING...' : 'SIGN IN'}
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      AUTHENTICATING...
+                    </>
+                  ) : (
+                    'SIGN IN'
+                  )}
                 </Button>
 
                 <div className="text-center space-y-4 mt-8 pt-6 border-t border-slate-100">
@@ -148,17 +183,6 @@ export default function LoginPage() {
                       SIGN UP
                     </Link>
                   </p>
-
-                  <div className="grid grid-cols-2 gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-100 text-[10px] font-medium text-slate-400">
-                    <div className="flex flex-col">
-                      <span className="font-black text-slate-600 uppercase">Admin</span>
-                      admin@example.com
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-black text-slate-600 uppercase">Employee</span>
-                      employee@example.com
-                    </div>
-                  </div>
                 </div>
               </form>
             </Form>

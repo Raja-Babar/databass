@@ -34,15 +34,15 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 
 // --- 1. I.T SECTION PATHS (Updated folder: itsection) ---
 const itScanningItems = [
-  { href: '/dashboard/scanning', icon: ScanLine, label: 'Digitization Progress' },
+  { href: '/dashboard/admin/scanning', icon: ScanLine, label: 'Digitization Progress' },
   { href: '/dashboard/itsection/employee-reports', icon: FileSignature, label: 'Digitization Report' },
   { href: '/dashboard/itsection/attendance', icon: CalendarCheck, label: 'Attendance' },
   { href: '/dashboard/itsection/employee-task-record', icon: ClipboardCheck, label: 'Employee Task Record' },
 ];
 
 const appFileItems = [
-  { href: '/dashboard/report-assistant', icon: Sparkles, label: 'Report Assistant' },
-  { href: '/dashboard/itsection/reporting', icon: FileText, label: 'Reporting' },
+  { href: '/dashboard/admin/report-assistant', icon: Sparkles, label: 'Report Assistant' },
+  { href: '/dashboard/admin/reporting', icon: FileText, label: 'Reporting' },
 ];
 
 // --- 2. LIBRARY SECTION PATHS (mhprl folder) ---
@@ -53,15 +53,15 @@ const mhpResearchLibraryItems = [
 ];
 
 const publicationItems = [
-  { href: '/dashboard/mhprl/library', icon: Library, label: 'Auto-Generate-Bill' },
-  { href: '/dashboard/publications', icon: BookOpen, label: 'Bills-Records' },
+  { href: '/dashboard/admin/mhprl/library', icon: Library, label: 'Auto-Generate-Bill' },
+  { href: '/dashboard/admin/publications', icon: BookOpen, label: 'Bills-Records' },
 ];
 
 // --- 3. ADMINISTRATION PATHS ---
 const administrationItems = [
-  { href: '/dashboard/salaries', icon: DollarSign, label: 'Salaries' },
-  { href: '/dashboard/petty-cash', icon: Wallet, label: 'Petty Cash' },
-  { href: '/dashboard/correspondence', icon: FileText, label: 'Correspondence' },
+  { href: '/dashboard/admin/salaries', icon: DollarSign, label: 'Salaries' },
+  { href: '/dashboard/admin/petty-cash', icon: Wallet, label: 'Petty Cash' },
+  { href: '/dashboard/admin/correspondence', icon: FileText, label: 'Correspondence' },
 ];
 
 // --- Sub-component for Collapsible Sections ---
@@ -142,8 +142,8 @@ export function DashboardNav() {
         {user.role === 'Admin' && (
           <>
             <SidebarMenuItem>
-              <Link href="/dashboard/user-management">
-                <SidebarMenuButton isActive={pathname.startsWith('/dashboard/user-management')}>
+              <Link href="/dashboard/admin/user-management">
+                <SidebarMenuButton isActive={pathname.startsWith('/dashboard/admin/user-management')}>
                   <Users />
                   <span className="font-medium">User Management</span>
                 </SidebarMenuButton>
@@ -156,8 +156,8 @@ export function DashboardNav() {
             <NavSection title="Publications" icon={BookOpen} items={publicationItems} isOpen={openSections.pub} onOpenChange={() => toggleSection('pub')} pathname={pathname} />
             
             <SidebarMenuItem>
-              <Link href="/dashboard/projects">
-                <SidebarMenuButton isActive={pathname.startsWith('/dashboard/projects')}>
+              <Link href="/dashboard/admin/projects">
+                <SidebarMenuButton isActive={pathname.startsWith('/dashboard/admin/projects')}>
                   <Briefcase />
                   <span>Projects</span>
                 </SidebarMenuButton>
