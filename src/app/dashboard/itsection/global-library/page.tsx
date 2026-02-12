@@ -227,7 +227,9 @@ export default function GlobalLibraryPage() {
                 </TableRow>
               ) : records.map((record) => (
                 <TableRow key={record.id} className="group hover:bg-slate-50/50 transition-colors">
-                  <TableCell className="font-bold text-indigo-600 max-w-[200px] truncate">{record.file_name}</TableCell>
+                  <TableCell className="font-bold text-indigo-600 min-w-[250px] max-w-[400px] whitespace-normal break-words leading-tight py-4">
+  {record.file_name}
+</TableCell>
                   <TableCell className="max-w-[200px] truncate font-semibold text-slate-800">{record.book_name}</TableCell>
                   <TableCell className={cn("max-w-[130px] truncate", record.author_name === 'اڻڄاتل' ? "text-slate-300" : "text-slate-600")}>
                     {record.author_name}

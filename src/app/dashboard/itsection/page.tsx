@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react'; // Added useEffect
 import { useAuth } from '@/hooks/use-auth';
 import { useReports } from '@/hooks/itsection/use-reports';
 import { useDigitization } from '@/hooks/itsection/use-digitization'; 
@@ -22,14 +22,24 @@ export default function EmployeeDashboardPage() {
   const { user } = useAuth();
   const { reports: allReports = [] } = useReports(user);
   
-  // Destructuring with alias 'myTasks' to fix the filter error
-  const { records: myTasks = [], loading: tasksLoading } = useDigitization(); 
+  // refreshData mangwao taake realtime update ho sakay
+  const { records: allRecords = [], loading: tasksLoading, refreshData } = useDigitization(); 
   
   const { toast } = useToast();
-  
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [updating, setUpdating] = useState(false);
+
+  // --- REALTIME SYNC FOR DASHBOARD ---
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'digitization_records' }, 
+      () => { if (refreshData) refreshData(); })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [refreshData]);
 
   // Statistics Calculation
   const today = new Date().toISOString().split('T')[0];
@@ -38,19 +48,28 @@ export default function EmployeeDashboardPage() {
     const userReports = allReports.filter(r => r.employee_id === user?.id);
     const todayReports = userReports.filter(r => r.submitted_date === today);
     
-    // Safety check for myTasks to prevent .filter error
-    const tasksArray = Array.isArray(myTasks) ? myTasks : [];
-    const pendingTasks = tasksArray.filter(t => t.stage !== 'Completed');
+    // SIRF USER KE APNE TASKS FILTER KAREIN
+    const myTasks = Array.isArray(allRecords) 
+      ? allRecords.filter(t => t.assignee === user?.name) 
+      : [];
+
+    const pendingTasks = myTasks.filter(t => t.stage !== 'Completed');
 
     return {
       todayPages: todayReports.filter(r => r.type === 'Pages').reduce((s, r) => s + r.quantity, 0),
       todayBooks: todayReports.filter(r => r.type === 'Books').reduce((s, r) => s + r.quantity, 0),
       pendingTasksCount: pendingTasks.length,
-      recent: userReports.slice(0, 6)
+      activeTask: pendingTasks[0] || null, // Pehla pending task as active assignment
+      recent: userReports.slice(0, 6),
+      myTasks // Pass this for mapping in UI
     };
-  }, [allReports, myTasks, user, today]);
+  }, [allReports, allRecords, user, today]);
 
   const handlePasswordChange = async () => {
+    if (newPassword.length < 6) {
+      toast({ variant: "destructive", title: "Weak Password", description: "Password must be at least 6 characters." });
+      return;
+    }
     if (newPassword !== confirmPassword) {
       toast({ variant: "destructive", title: "Mismatch", description: "Passwords do not match." });
       return;
@@ -83,7 +102,7 @@ export default function EmployeeDashboardPage() {
         </div>
         <div className="flex gap-2">
           <Link href="/dashboard/itsection/global-library">
-            <Button variant="outline" className="rounded-2xl h-12 px-6 font-bold border-2">
+            <Button variant="outline" className="rounded-2xl h-12 px-6 font-bold border-2 hover:bg-slate-50 transition-all">
               Global Library
             </Button>
           </Link>
@@ -108,33 +127,33 @@ export default function EmployeeDashboardPage() {
             <Card className="border-none shadow-xl bg-gradient-to-br from-indigo-600 to-indigo-700 text-white rounded-[2rem] overflow-hidden">
               <CardContent className="p-8 flex items-center justify-between relative">
                 <Layers className="absolute right-[-10px] bottom-[-10px] h-32 w-32 text-white/10" />
-                <div className="space-y-1">
+                <div className="space-y-1 z-10">
                   <p className="text-indigo-100 text-[10px] font-black uppercase tracking-widest">Today's Pages</p>
                   <h3 className="text-5xl font-black tracking-tighter">{stats.todayPages.toLocaleString()}</h3>
                 </div>
-                <div className="h-14 w-14 bg-white/20 rounded-2xl backdrop-blur-md flex items-center justify-center"><Layers className="h-6 w-6" /></div>
+                <div className="h-14 w-14 bg-white/20 rounded-2xl backdrop-blur-md flex items-center justify-center z-10"><Layers className="h-6 w-6" /></div>
               </CardContent>
             </Card>
 
             <Card className="border-none shadow-xl bg-gradient-to-br from-violet-600 to-violet-700 text-white rounded-[2rem] overflow-hidden">
               <CardContent className="p-8 flex items-center justify-between relative">
                 <BookOpen className="absolute right-[-10px] bottom-[-10px] h-32 w-32 text-white/10" />
-                <div className="space-y-1">
+                <div className="space-y-1 z-10">
                   <p className="text-violet-100 text-[10px] font-black uppercase tracking-widest">Today's Books</p>
                   <h3 className="text-5xl font-black tracking-tighter">{stats.todayBooks.toLocaleString()}</h3>
                 </div>
-                <div className="h-14 w-14 bg-white/20 rounded-2xl backdrop-blur-md flex items-center justify-center"><BookOpen className="h-6 w-6" /></div>
+                <div className="h-14 w-14 bg-white/20 rounded-2xl backdrop-blur-md flex items-center justify-center z-10"><BookOpen className="h-6 w-6" /></div>
               </CardContent>
             </Card>
 
             <Card className="border-none shadow-xl bg-white rounded-[2rem] overflow-hidden border border-orange-100">
               <CardContent className="p-8 flex items-center justify-between relative">
                 <Clock className="absolute right-[-10px] bottom-[-10px] h-32 w-32 text-orange-500/5" />
-                <div className="space-y-1">
+                <div className="space-y-1 z-10">
                   <p className="text-orange-500 text-[10px] font-black uppercase tracking-widest">Pending Tasks</p>
                   <h3 className="text-5xl font-black tracking-tighter text-slate-800">{stats.pendingTasksCount}</h3>
                 </div>
-                <div className="h-14 w-14 bg-orange-100 rounded-2xl flex items-center justify-center text-orange-600">
+                <div className="h-14 w-14 bg-orange-100 rounded-2xl flex items-center justify-center text-orange-600 z-10">
                   <Clock className="h-6 w-6" />
                 </div>
               </CardContent>
@@ -152,7 +171,7 @@ export default function EmployeeDashboardPage() {
               <CardContent className="p-8">
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {stats.recent.map((report) => (
-                    <div key={report.id} className="p-5 rounded-2xl border border-slate-100 bg-slate-50/30">
+                    <div key={report.id} className="p-5 rounded-2xl border border-slate-100 bg-slate-50/30 hover:bg-slate-50 transition-all">
                       <div className="flex justify-between mb-2">
                         <Badge className="bg-indigo-50 text-indigo-600 border-none font-bold text-[10px] uppercase">{report.type}</Badge>
                         <span className="text-[10px] font-black text-slate-400">{report.submitted_date}</span>
@@ -161,39 +180,52 @@ export default function EmployeeDashboardPage() {
                       <p className="text-[10px] font-bold text-slate-500 uppercase mt-1 truncate">{report.stage}</p>
                     </div>
                   ))}
-                  {stats.recent.length === 0 && <p className="text-slate-400 italic text-sm">No recent reports found.</p>}
+                  {stats.recent.length === 0 && <p className="text-slate-400 italic text-sm py-4">No recent reports found.</p>}
                 </div>
               </CardContent>
             </Card>
 
             {/* Current Active Task Card */}
-            <Card className="border-none shadow-xl rounded-[2.5rem] bg-slate-900 text-white">
-              <CardHeader className="px-8 pt-8">
+            <Card className="border-none shadow-xl rounded-[2.5rem] bg-slate-900 text-white overflow-hidden relative">
+              <CardHeader className="px-8 pt-8 relative z-10">
                 <CardTitle className="text-lg font-black uppercase flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-indigo-400" /> Active Assignment
+                  <AlertCircle className="h-5 w-5 text-orange-400" /> Active Assignment
                 </CardTitle>
               </CardHeader>
-              <CardContent className="px-8 pb-8">
-                {myTasks.filter(t => t.stage !== 'Completed').slice(0, 1).map(task => (
-                  <div key={task.id} className="space-y-4">
+              <CardContent className="px-8 pb-8 relative z-10">
+                {stats.activeTask ? (
+                  <div className="space-y-5">
                     <div>
-                      <h4 className="font-bold text-xl leading-tight">{task.file_name}</h4>
-                      <p className="text-slate-400 text-xs mt-1 italic">Book: {task.book_name || 'N/A'}</p>
-                      <Badge className="mt-2 bg-indigo-500/20 text-indigo-300 border-none uppercase text-[9px]">{task.stage}</Badge>
+                      <h4 className="font-bold text-xl leading-snug break-words">{stats.activeTask.book_name}</h4>
+                      <p className="text-slate-400 text-[10px] font-mono mt-2 break-all opacity-70">{stats.activeTask.file_name}</p>
+                      <div className="mt-4 flex items-center gap-2">
+                        <Badge className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase text-[9px] px-2 py-1">
+                          {stats.activeTask.stage}
+                        </Badge>
+                        {stats.activeTask.deadline && (
+                           <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">
+                             Due: {stats.activeTask.deadline}
+                           </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="pt-4 border-t border-slate-800">
+                    <div className="pt-5 border-t border-white/10">
                       <Link href="/dashboard/itsection/global-library">
-                        <Button className="w-full bg-indigo-600 text-white hover:bg-indigo-700 font-black rounded-xl border-none">
-                          VIEW TASK HUB
+                        <Button className="w-full bg-white text-slate-900 hover:bg-indigo-50 font-black rounded-xl border-none h-11 transition-all active:scale-95">
+                          OPEN TASK HUB
                         </Button>
                       </Link>
                     </div>
                   </div>
-                ))}
-                {myTasks.filter(t => t.stage !== 'Completed').length === 0 && (
-                  <p className="text-slate-400 italic text-sm">No active tasks assigned to you right now.</p>
+                ) : (
+                  <div className="py-10 text-center">
+                    <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-3 opacity-50" />
+                    <p className="text-slate-400 italic text-sm uppercase font-bold tracking-widest">All caught up!</p>
+                  </div>
                 )}
               </CardContent>
+              {/* Abstract decorative shape */}
+              <div className="absolute top-[-20%] right-[-10%] w-40 h-40 bg-indigo-600/20 rounded-full blur-3xl"></div>
             </Card>
           </div>
         </TabsContent>
@@ -201,52 +233,62 @@ export default function EmployeeDashboardPage() {
         {/* --- SECURITY & PROFILE TAB --- */}
         <TabsContent value="profile" className="animate-in slide-in-from-bottom-4 duration-500 space-y-6">
           <div className="grid gap-6 md:grid-cols-2">
-            <Card className="rounded-[2rem] shadow-xl border-none p-8 space-y-6">
+            <Card className="rounded-[2rem] shadow-xl border-none p-8 space-y-6 bg-white">
               <h3 className="text-xl font-black uppercase flex items-center gap-2">
                 <Lock className="text-indigo-600" /> Update Password
               </h3>
               <div className="space-y-4">
-                <Input 
-                  type="password" 
-                  placeholder="New Password" 
-                  className="rounded-xl h-12"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
-                <Input 
-                  type="password" 
-                  placeholder="Confirm Password" 
-                  className="rounded-xl h-12"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black text-slate-400 uppercase ml-1">New Password</p>
+                  <Input 
+                    type="password" 
+                    placeholder="••••••••" 
+                    className="rounded-xl h-12 border-2 focus:ring-indigo-500"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black text-slate-400 uppercase ml-1">Confirm New Password</p>
+                  <Input 
+                    type="password" 
+                    placeholder="••••••••" 
+                    className="rounded-xl h-12 border-2 focus:ring-indigo-500"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                </div>
                 <Button 
                   onClick={handlePasswordChange} 
-                  disabled={updating}
-                  className="w-full h-12 rounded-xl font-bold bg-indigo-600"
+                  disabled={updating || !newPassword}
+                  className="w-full h-12 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95"
                 >
                   {updating ? 'Updating...' : 'Update Password'}
                 </Button>
               </div>
             </Card>
 
-            <Card className="rounded-[2rem] shadow-xl border-none p-8">
+            <Card className="rounded-[2rem] shadow-xl border-none p-8 bg-white">
               <h3 className="text-xl font-black uppercase mb-6 flex items-center gap-2">
                 <Fingerprint className="text-indigo-600" /> Personal Info
               </h3>
               <div className="space-y-4">
-                <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl">
-                  <Mail className="text-slate-400 h-5 w-5" />
+                <div className="flex items-center gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                    <Mail className="text-indigo-600 h-5 w-5" />
+                  </div>
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase">Email Address</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase">Registered Email</p>
                     <p className="font-bold text-slate-700">{user.email}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl">
-                  <KeyRound className="text-slate-400 h-5 w-5" />
+                <div className="flex items-center gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                    <KeyRound className="text-indigo-600 h-5 w-5" />
+                  </div>
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase">Employee ID</p>
-                    <p className="font-bold text-slate-700 font-mono">{user.id.slice(0, 8)}...</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase">System Identity (ID)</p>
+                    <p className="font-bold text-slate-700 font-mono text-xs">{user.id}</p>
                   </div>
                 </div>
               </div>

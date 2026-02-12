@@ -4,20 +4,23 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, UserPlus, Mail, Lock, User } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import Image from 'next/image';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({ 
     name: '', 
     email: '', 
     password: '',
-    // Role aur Department ab auto-set hain
     role: 'I.T & Scanning-Employee',
-    department: 'I.T Section' 
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { signup } = useAuth();
+  const { signup, appLogo } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -35,7 +38,6 @@ export default function SignupPage() {
 
     setIsSubmitting(true);
     try {
-      // Signup function call
       await signup(
         formData.name, 
         formData.email, 
@@ -44,11 +46,10 @@ export default function SignupPage() {
       );
       
       toast({
-        title: 'Registration Sent!',
-        description: 'Account created. Please wait for Admin approval.',
+        title: 'Registration Successful',
+        description: 'Account created! Please wait for Admin approval.',
       });
       
-      // Success ke baad login par bhej dena
       router.push('/login');
     } catch (error: any) {
       toast({
@@ -62,87 +63,108 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black p-4 font-sans">
-      <div className="w-full max-w-md space-y-6 rounded-2xl bg-zinc-900 p-8 border border-zinc-800 shadow-2xl">
-        
-        <div className="text-center space-y-2">
-          <div className="mx-auto w-12 h-12 bg-indigo-600/20 rounded-full flex items-center justify-center mb-4">
-            <UserPlus className="text-indigo-500 h-6 w-6" />
-          </div>
-          <h2 className="text-3xl font-extrabold text-white tracking-tight">Join MHPISSJ</h2>
-          <p className="text-zinc-400 text-sm">Registering for <span className="text-indigo-400 font-semibold">I.T Section</span></p>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="space-y-4 mt-6">
-          {/* Full Name */}
-          <div className="relative">
-            <User className="absolute left-3 top-3 h-5 w-5 text-zinc-500" />
-            <input
-              type="text"
-              placeholder="Full Name"
-              className="w-full rounded-xl bg-zinc-800/50 pl-10 pr-4 py-3 text-white border border-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            />
-          </div>
+    <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-4">
+      <div className="w-full max-w-md animate-in fade-in zoom-in duration-500">
+        <Card className="shadow-2xl overflow-hidden border-none rounded-[2.5rem] bg-white">
+          <div className="bg-indigo-600 h-2 w-full" />
+          
+          <CardHeader className="text-center pt-10 pb-6">
+            <div className="mx-auto bg-slate-50 p-3 rounded-full shadow-inner inline-block mb-4 relative">
+              <div className="h-24 w-24 rounded-full overflow-hidden flex items-center justify-center bg-white border shadow-sm">
+                <Image 
+                  src={appLogo || "/logo.png"} 
+                  alt="MHPISSJ Logo" 
+                  width={100} 
+                  height={100} 
+                  className="object-cover"
+                  priority
+                  unoptimized 
+                />
+              </div>
+            </div>
+            <CardTitle className="text-3xl font-black tracking-tighter text-slate-800 uppercase leading-none">
+              JOIN MHPISSJ
+            </CardTitle>
+            <CardDescription className="text-indigo-600 font-bold italic mt-2">
+              Create your employee account
+            </CardDescription>
+          </CardHeader>
 
-          {/* Email */}
-          <div className="relative">
-            <Mail className="absolute left-3 top-3 h-5 w-5 text-zinc-500" />
-            <input
-              type="email"
-              placeholder="Email Address"
-              className="w-full rounded-xl bg-zinc-800/50 pl-10 pr-4 py-3 text-white border border-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            />
-          </div>
+          <CardContent className="px-8 pb-10">
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Full Name */}
+              <div className="space-y-2">
+                <label className="font-bold text-slate-600 ml-1 text-sm">Full Name</label>
+                <Input 
+                  placeholder="John Doe" 
+                  className="rounded-2xl h-12 bg-slate-50 border-slate-200 focus:bg-white text-slate-950 font-bold transition-all shadow-sm" 
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                />
+              </div>
 
-          {/* Password */}
-          <div className="relative">
-            <Lock className="absolute left-3 top-3 h-5 w-5 text-zinc-500" />
-            <input
-              type="password"
-              placeholder="Password"
-              className="w-full rounded-xl bg-zinc-800/50 pl-10 pr-4 py-3 text-white border border-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            />
-          </div>
+              {/* Email */}
+              <div className="space-y-2">
+                <label className="font-bold text-slate-600 ml-1 text-sm">Email Address</label>
+                <Input 
+                  type="email"
+                  placeholder="email@example.com" 
+                  className="rounded-2xl h-12 bg-slate-50 border-slate-200 focus:bg-white text-slate-950 font-bold transition-all shadow-sm" 
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                />
+              </div>
 
-          {/* Hidden/Disabled Role Info (Sirf dikhane ke liye) */}
-          <div className="p-3 bg-indigo-900/10 border border-indigo-500/20 rounded-xl">
-             <p className="text-[11px] text-indigo-300 uppercase tracking-widest font-bold text-center">
-               Access Level: Employee (I.T)
-             </p>
-          </div>
+              {/* Password */}
+              <div className="space-y-2">
+                <label className="font-bold text-slate-600 ml-1 text-sm">Password</label>
+                <Input 
+                  type="password" 
+                  placeholder="••••••••" 
+                  className="rounded-2xl h-12 bg-slate-50 border-slate-200 focus:bg-white text-slate-950 font-bold transition-all shadow-sm" 
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                />
+              </div>
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full flex justify-center items-center rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white hover:bg-indigo-500 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-600/20"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              'Create Account'
-            )}
-          </button>
-        </form>
+              {/* Access Info Tag */}
+              <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-2xl">
+                 <p className="text-[10px] text-indigo-600 uppercase tracking-widest font-black text-center">
+                   Default Access: I.T & Scanning Employee
+                 </p>
+              </div>
 
-        <p className="text-center text-sm text-zinc-500">
-          Already have an account?{' '}
-          <button 
-            onClick={() => router.push('/login')} 
-            className="text-indigo-400 hover:underline font-medium"
-          >
-            Sign in
-          </button>
+              <Button 
+                type="submit" 
+                className="w-full h-12 rounded-2xl font-black text-sm tracking-widest bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all flex items-center justify-center gap-2" 
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    CREATING ACCOUNT...
+                  </>
+                ) : (
+                  'CREATE ACCOUNT'
+                )}
+              </Button>
+
+              <div className="text-center space-y-4 mt-8 pt-6 border-t border-slate-100">
+                <p className="text-xs text-slate-500 font-semibold">
+                  Already have an account?{' '}
+                  <Link href="/login" className="font-black text-indigo-600 hover:text-indigo-800 underline-offset-4 hover:underline">
+                    SIGN IN
+                  </Link>
+                </p>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
+        <p className="text-center mt-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+          M.H. Panhwar Institute © 2026
         </p>
       </div>
-    </div>
+    </main>
   );
 }

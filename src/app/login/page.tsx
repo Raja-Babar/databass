@@ -133,7 +133,7 @@ export default function LoginPage() {
                       <FormControl>
                         <Input 
                           placeholder="admin@mhp.com" 
-                          className="rounded-2xl h-12 bg-slate-50 border-slate-200 focus:bg-white transition-all shadow-sm" 
+                          className="rounded-2xl h-12 bg-slate-50 border-slate-200 focus:bg-black transition-all shadow-sm" 
                           {...field} 
                         />
                       </FormControl>
@@ -152,7 +152,7 @@ export default function LoginPage() {
                         <Input 
                           type="password" 
                           placeholder="••••••••" 
-                          className="rounded-2xl h-12 bg-slate-50 border-slate-200 focus:bg-white transition-all shadow-sm" 
+                          className="rounded-2xl h-12 bg-slate-50 border-slate-200 focus:bg-black transition-all shadow-sm" 
                           {...field} 
                         />
                       </FormControl>
