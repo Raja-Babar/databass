@@ -123,6 +123,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []); // Run only once
 
+  useEffect(() => {
+    if (!isLoading && user) {
+      const isAdminRoute = pathname.startsWith('/dashboard/admin');
+      
+      // Agar user Admin nahi hai aur Admin route par jane ki koshish kare
+      if (isAdminRoute && user.role !== 'Admin') {
+        toast({
+          variant: "destructive",
+          title: "Access Denied",
+          description: "You don't have permission to access the admin area."
+        });
+        router.replace('/dashboard');
+      }
+    }
+  }, [pathname, user, isLoading, router, toast]);
+
   const logout = async () => {
     await supabase.auth.signOut();
   };
